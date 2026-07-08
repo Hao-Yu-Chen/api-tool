@@ -1,0 +1,23 @@
+appId: com.apitool.app
+productName: API Tool
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**/*
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: API Tool

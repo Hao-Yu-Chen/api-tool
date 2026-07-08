@@ -1,0 +1,377 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--app-text);
+  background: var(--app-bg);
+  transition: background-color 0.3s, color 0.3s;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ====== 风格叠加 ====== */
+
+/* 玻璃态：面板半透明 + 背景模糊 */
+body.theme-glass .app-topbar,
+body.theme-glass .app-sidebar,
+body.theme-glass .n-card {
+  backdrop-filter: blur(var(--app-blur, 12px));
+  -webkit-backdrop-filter: blur(var(--app-blur, 12px));
+}
+
+/* 赛博风格：发光边框 */
+body.theme-cyber {
+  --app-active-border: var(--theme-glow, #0ff);
+}
+
+body.theme-cyber .request-item.active,
+body.theme-cyber .collection-header.drag-over {
+  box-shadow: var(--app-shadow-glow, 0 0 8px var(--theme-glow));
+}
+
+/* 紧凑密度 */
+body.theme-compact {
+  font-size: 12px;
+}
+
+body.theme-compact .url-bar {
+  padding: 4px 12px;
+}
+
+body.theme-compact .editor-panel {
+  padding: 0 8px 4px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #9999; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #aaa9; }
+
+/* ====== 过渡动画 ====== */
+.n-config-provider * {
+  transition: background-color 0.25s, border-color 0.25s, color 0.25s;
+}
+
+/* ====== @keyframes 动画库 ====== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes scaleBounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.94); }
+  60% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 2px var(--app-active-border); }
+  50% { box-shadow: 0 0 14px var(--app-active-border); }
+}
+
+@keyframes rippleEffect {
+  to {
+    transform: scale(6);
+    opacity: 0;
+  }
+}
+
+@keyframes navUnderline {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes floatUpDown {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.8); }
+  70% { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes progressShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ====== 路由过渡 ====== */
+.route-enter-active {
+  animation: scaleIn 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.route-leave-active {
+  animation: fadeIn 0.12s ease-in reverse;
+}
+
+/* ====== 折叠面板过渡（Collection 展开/折叠） ====== */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: opacity 0.2s ease, max-height 0.25s ease;
+  overflow: hidden;
+}
+.collapse-enter-from,
+.collapse-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+/* ====== 淡入过渡 ====== */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ====== 动画预设条件规则 ====== */
+
+body.theme-micro-on {
+
+  /* 按钮悬浮放大 + 阴影 */
+  .n-button:not(.n-button--text):not(.n-button--default):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    transition: all 0.2s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* 按钮按下反馈 */
+  .n-button:not(.n-button--text):active {
+    transform: scale(0.96);
+    transition: transform 0.1s ease;
+  }
+
+  /* Send 按钮发光脉冲（非 loading 状态） */
+  .send-btn:not(.n-button--loading) {
+    animation: pulseGlow 2.5s ease-in-out infinite;
+  }
+  .send-btn:not(.n-button--loading):hover {
+    animation: none;
+    box-shadow: 0 0 16px var(--app-active-border);
+  }
+
+  /* 卡片悬浮抬升 */
+  .n-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    transition: all 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* 列表项悬浮滑动 + 背景高亮 */
+  .request-item {
+    transition: all 0.18s ease;
+  }
+  .request-item:hover {
+    transform: translateX(3px);
+    background: var(--app-hover-bg, rgba(128,128,128,0.08));
+  }
+
+  /* 输入框悬浮边框 */
+  .n-input:hover {
+    border-color: var(--app-active-border);
+    transition: border-color 0.2s ease;
+  }
+
+  /* 输入框聚焦光晕 */
+  .n-input--focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-active-border) 30%, transparent);
+    transition: box-shadow 0.25s ease;
+  }
+
+  /* 设置页卡片入场 */
+  .preset-card {
+    transition: all 0.2s ease;
+  }
+  .preset-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+  }
+  .preset-card.active {
+    box-shadow: 0 0 0 2px var(--app-active-border);
+  }
+
+  /* 下拉菜单项悬浮 */
+  .n-dropdown-option:hover {
+    transform: translateX(2px);
+    transition: transform 0.15s ease;
+  }
+
+  /* 标签页切换动画 */
+  .n-tabs .n-tabs-tab {
+    transition: color 0.2s, transform 0.15s;
+  }
+  .n-tabs .n-tabs-tab:hover {
+    transform: translateY(-1px);
+  }
+
+  /* 侧边栏项微动 */
+  .app-sidebar .n-tree-node {
+    transition: transform 0.15s ease;
+  }
+  .app-sidebar .n-tree-node:hover {
+    transform: translateX(2px);
+  }
+
+  /* 通用按钮按压弹跳 */
+  .n-button:active {
+    animation: scaleBounce 0.2s ease;
+  }
+
+  /* 标签选中指示器动画 */
+  .n-tabs .n-tabs-bar {
+    transition: left 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), width 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* 输入框底部发光条 */
+  .n-input {
+    position: relative;
+  }
+  .n-input::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: var(--app-active-border);
+    transition: all 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+    transform: translateX(-50%);
+    border-radius: 1px;
+  }
+  .n-input--focus::after {
+    width: 100%;
+  }
+
+  /* Toast/Message 入场 */
+  .n-message {
+    animation: slideDown 0.3s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* Dialog/Modal 入场 */
+  .n-modal {
+    animation: scaleIn 0.25s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+}
+
+/* ====== 通用过渡（不受 micro-on 控制） ====== */
+
+/* 全部按钮悬浮过渡 */
+.n-button {
+  transition: all 0.2s ease;
+}
+.n-button:hover {
+  filter: brightness(1.05);
+}
+
+/* 请求列表项选中弹跳 */
+.request-item.active {
+  animation: scaleBounce 0.25s ease;
+}
+
+/* HTTP 方法标签呼吸 */
+.method-badge {
+  transition: box-shadow 0.3s ease;
+}
+.method-badge.active-method {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}
+
+/* 响应状态码闪烁 */
+.status-code.success {
+  animation: pulseGlow 1.5s ease-in-out 2;
+  --app-active-border: #52c41a;
+}
+.status-code.error {
+  animation: pulseGlow 1s ease-in-out 3;
+  --app-active-border: #ff4d4f;
+}
+
+/* KeyValue 行过渡 */
+.kv-row-enter-active {
+  animation: slideUp 0.2s ease;
+}
+.kv-row-leave-active {
+  animation: fadeIn 0.15s ease-in reverse;
+}
+.kv-row-move {
+  transition: transform 0.25s ease;
+}
+
+/* Tab 切换 TransitionGroup */
+.tab-enter-active {
+  animation: slideInLeft 0.2s ease;
+}
+.tab-leave-active {
+  animation: fadeIn 0.1s ease-in reverse;
+  position: absolute;
+}
+
+/* 涟漪按钮 — 增强版 */
+.ripple-btn {
+  position: relative;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+.ripple-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at center, rgba(255,255,255,0.45) 0%, transparent 50%);
+  transform: scale(0);
+  pointer-events: none;
+  transition: none;
+}
+.ripple-btn:active::after {
+  animation: rippleEffect 0.5s ease-out forwards;
+}
+
+/* ====== Reduce Motion（body class 驱动，替代 @media 查询） ====== */
+body.theme-reduce-motion *,
+body.theme-reduce-motion *::before,
+body.theme-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

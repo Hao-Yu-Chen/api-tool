@@ -1,0 +1,29 @@
+node_modules/
+dist/
+out/
+release/
+*.local
+.DS_Store
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Editor
+*.code-workspace
+
+# Env
+.env
+.env.*
+!.env.example
