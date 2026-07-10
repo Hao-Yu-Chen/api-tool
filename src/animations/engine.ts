@@ -4,7 +4,7 @@ import type { AnimationPreset } from './tokens'
 /** 粒子系统运行时配置（由引擎从 AnimationPreset 计算得出） */
 export interface ParticleConfig {
   enabled: boolean
-  type: 'constellation' | 'aurora' | 'matrix' | 'none'
+  type: 'constellation' | 'aurora' | 'matrix' | 'sakura' | 'none'
   color: string
   accentColor: string
   density: number
@@ -16,6 +16,7 @@ const PARTICLE_COUNTS: Record<string, number> = {
   constellation: 150,
   aurora: 3,
   matrix: 50,
+  sakura: 40,
   none: 0
 }
 

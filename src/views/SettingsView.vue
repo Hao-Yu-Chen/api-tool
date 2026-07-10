@@ -129,7 +129,7 @@ async function toggleDesktopSetting(key: keyof DesktopSettings, value: boolean) 
           >
             <div class="anim-preview" :class="`anim-${ap.name}`">
               <div class="anim-icon">
-                {{ ap.particleType === 'constellation' ? '✨' : ap.particleType === 'matrix' ? '🔷' : ap.particleType === 'aurora' ? '🌊' : '⚫' }}
+                {{ ap.particleType === 'constellation' ? '✨' : ap.particleType === 'sakura' ? '🌸' : ap.particleType === 'matrix' ? '🔷' : ap.particleType === 'aurora' ? '🌊' : '⚫' }}
               </div>
             </div>
             <span class="preset-name">{{ ap.label }}</span>
@@ -184,8 +184,8 @@ async function toggleDesktopSetting(key: keyof DesktopSettings, value: boolean) 
             </div>
             <div class="desktop-setting-row">
               <div>
-                <span class="setting-label">最小化到托盘</span>
-                <span class="setting-hint">关闭窗口时隐藏到系统托盘而不是退出</span>
+                <span class="setting-label">默认关闭行为</span>
+                <span class="setting-hint">关闭窗口时默认最小化到托盘（可在关闭弹窗中重新选择）</span>
               </div>
               <n-switch
                 :value="desktopSettings.minimizeToTray"
@@ -221,7 +221,9 @@ async function toggleDesktopSetting(key: keyof DesktopSettings, value: boolean) 
 
 <style scoped>
 .settings-layout {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--app-bg);
   color: var(--app-text);
   position: relative;
@@ -244,7 +246,10 @@ async function toggleDesktopSetting(key: keyof DesktopSettings, value: boolean) 
 }
 
 .settings-content {
+  flex: 1;
+  overflow-y: auto;
   max-width: 720px;
+  width: 100%;
   margin: 0 auto;
   padding: 24px 20px 80px;
 }

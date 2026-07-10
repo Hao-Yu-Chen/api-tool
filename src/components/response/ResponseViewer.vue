@@ -71,11 +71,11 @@ function handleDownload() {
 </template>
 
 <style scoped>
-.response-viewer { flex: 1; overflow: auto; background: var(--app-panel-bg); }
-.resp-meta-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: var(--app-surface-bg); border-bottom: 1px solid var(--app-border-light); }
+.response-viewer { flex: 1; overflow: auto; background: var(--app-panel-bg); display: flex; flex-direction: column; }
+.resp-meta-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; background: var(--app-surface-bg); border-bottom: 1px solid var(--app-border-light); flex-shrink: 0; }
 .meta-left { display: flex; align-items: center; }
 .meta-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.resp-body-area { background: var(--app-panel-bg); }
+.resp-body-area { background: var(--app-panel-bg); flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .empty-response {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 80px 16px; text-align: center;

@@ -58,6 +58,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    icon: join(__dirname, '../../build/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -74,14 +75,39 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  // 关闭行为：最小化到托盘（退出时直接关闭）
-  mainWindow.on('close', (event) => {
-    if (!isQuitting) {
-      const settings = store.get('desktop')
-      if (settings.minimizeToTray) {
-        event.preventDefault()
-        mainWindow?.hide()
-      }
+  // 关闭行为：弹出选择对话框
+  mainWindow.on('close', async (event) => {
+    if (isQuitting) return
+    event.preventDefault()
+
+    const settings = store.get('desktop')
+
+    const result = await dialog.showMessageBox(mainWindow!, {
+      type: 'question',
+      title: 'API Tool',
+      message: '关闭应用',
+      detail: '请选择关闭方式：\n\n• 后台托管 — 窗口隐藏到系统托盘，应用继续运行\n• 直接关闭 — 完全退出应用',
+      buttons: ['后台托管', '直接关闭', '取消'],
+      defaultId: settings.minimizeToTray ? 0 : 1,
+      cancelId: 2,
+      checkboxLabel: '记住我的选择，以后不再询问',
+      checkboxChecked: false
+    })
+
+    // 用户点击"取消"或关闭了对话框
+    if (result.response === 2) return
+
+    // 记住选择 → 更新设置，后续关闭直接按设置执行
+    if (result.checkboxChecked) {
+      store.set('desktop.minimizeToTray', result.response === 0)
+    }
+
+    if (result.response === 0) {
+      // 后台托管：隐藏到系统托盘
+      mainWindow?.hide()
+    } else {
+      // 直接关闭：完全退出应用
+      quitApp()
     }
   })
 

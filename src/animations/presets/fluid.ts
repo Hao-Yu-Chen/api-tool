@@ -3,8 +3,8 @@ import type { AnimationPreset } from '@/animations/tokens'
 
 const fluid: AnimationPreset = {
   name: 'fluid',
-  label: '极光',
-  particleType: 'aurora',
+  label: '樱花',
+  particleType: 'sakura',
   animationLevel: 'moderate',
   particleColorSource: 'mixed',
   particleDensity: 1.0,

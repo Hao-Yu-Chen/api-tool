@@ -123,6 +123,7 @@ interface StardustParticle {
   radius: number; baseOpacity: number
   twinklePhase: number; twinkleSpeed: number  // for pulsing glow
   depth: number  // 0=far(小,慢) → 1=near(大,快), drives parallax feel
+  history: { x: number; y: number }[]  // trail positions for motion blur without overlay
 }
 
 let stardustParticles: StardustParticle[] = []
@@ -142,7 +143,8 @@ function createStardust(count: number) {
       baseOpacity: 0.15 + depth * 0.45,   // near particles brighter
       twinklePhase: Math.random() * Math.PI * 2,
       twinkleSpeed: 0.008 + Math.random() * 0.025,
-      depth
+      depth,
+      history: []
     })
   }
 }
@@ -177,14 +179,18 @@ function updateStardust() {
       p.vy += (dy / dist) * force
     }
 
+    // Record history BEFORE moving (for trail)
+    p.history.push({ x: p.x, y: p.y })
+    if (p.history.length > 12) p.history.shift()
+
     p.x += p.vx
     p.y += p.vy
 
-    // Wrap edges
-    if (p.x < -30) p.x = w + 30
-    if (p.x > w + 30) p.x = -30
-    if (p.y < -30) p.y = h + 30
-    if (p.y > h + 30) p.y = -30
+    // Wrap edges — clear history on jump
+    if (p.x < -30) { p.x = w + 30; p.history = [] }
+    if (p.x > w + 30) { p.x = -30; p.history = [] }
+    if (p.y < -30) { p.y = h + 30; p.history = [] }
+    if (p.y > h + 30) { p.y = -30; p.history = [] }
 
     // Friction — far particles drift lazier
     p.vx *= 0.997 - p.depth * 0.002
@@ -200,12 +206,8 @@ function drawStardust(color: string) {
   const w = window.innerWidth
   const h = window.innerHeight
 
-  // Very subtle clear for soft motion blur
-  const isDark = themeStore.isDark
-  const overlayAlpha = isDark ? 0.08 : 0.10
-  const overlayRgb = isDark ? '0, 0, 0' : '255, 255, 255'
-  ctx.fillStyle = `rgba(${overlayRgb}, ${overlayAlpha})`
-  ctx.fillRect(0, 0, w, h)
+  // Fully clear canvas each frame — trails are drawn explicitly from history
+  ctx.clearRect(0, 0, w, h)
 
   const alphaHex = (a: number) =>
     Math.floor(Math.min(1, a) * 255).toString(16).padStart(2, '0')
@@ -214,6 +216,17 @@ function drawStardust(color: string) {
     // Twinkle: sine wave oscillation around base opacity
     const twinkle = 0.7 + 0.3 * Math.sin(p.twinklePhase)
     const opacity = p.baseOpacity * twinkle
+
+    // Draw trail from history (oldest → newest, increasing opacity)
+    const trailLen = p.history.length
+    for (let t = 0; t < trailLen; t++) {
+      const pos = p.history[t]
+      const trailOpacity = opacity * (0.08 + 0.12 * (t / Math.max(1, trailLen - 1)))
+      ctx.beginPath()
+      ctx.arc(pos.x, pos.y, p.radius * 0.6, 0, Math.PI * 2)
+      ctx.fillStyle = `${color}${alphaHex(trailOpacity)}`
+      ctx.fill()
+    }
 
     // Glow halo (larger, very faint)
     const haloRadius = p.radius * 3.5
@@ -234,145 +247,166 @@ function drawStardust(color: string) {
   }
 }
 
-// ====== Aurora System ======
+// ====== Sakura (Cherry Blossom) System ======
+// Petals drift downward with gentle sway and rotation, simulating falling cherry blossoms.
 
-interface AuroraLayer {
-  baseY: number
-  amplitude: number
-  frequency: number
-  speed: number
-  phase: number
-  harmonics: { freq: number; amp: number; speed: number; phase: number }[]
-  colorStop: string
+// Soft pink palette for cherry blossoms
+const SAKURA_PINK = '#ffb7c5'
+const SAKURA_DEEP = '#f4849b'
+const SAKURA_PALE = '#ffe0e6'
+
+interface SakuraPetal {
+  x: number; y: number
+  fallSpeed: number          // base falling speed (px/frame)
+  swayAmp: number            // horizontal sway amplitude
+  swayFreq: number           // horizontal sway frequency
+  swayPhase: number          // initial phase offset
+  rotation: number           // current rotation angle (radians)
+  rotationSpeed: number      // rotation speed per frame
+  size: number               // petal radius
+  opacity: number            // base opacity
+  petalType: number          // 0-2: different petal shapes
+  colorVariant: number       // 0-1: color between pale pink and deep pink
+  // Subtle wind gust
+  gustOffset: number
+  gustSpeed: number
 }
 
-let auroraLayers: AuroraLayer[] = []
+let sakuraPetals: SakuraPetal[] = []
 
-function createAurora(_count: number) {
+function createSakura(count: number) {
+  const w = window.innerWidth
   const h = window.innerHeight
-  auroraLayers = [
-    {
-      baseY: h * 0.3,
-      amplitude: 80,
-      frequency: 0.003,
-      speed: 0.0004,
-      phase: 0,
-      harmonics: [
-        { freq: 0.007, amp: 40, speed: 0.0003, phase: Math.PI * 0.3 },
-        { freq: 0.013, amp: 25, speed: 0.0005, phase: Math.PI * 0.7 },
-        { freq: 0.021, amp: 15, speed: 0.0007, phase: Math.PI * 1.1 },
-        { freq: 0.035, amp: 8, speed: 0.0009, phase: Math.PI * 1.5 }
-      ],
-      colorStop: 'primary'
-    },
-    {
-      baseY: h * 0.5,
-      amplitude: 100,
-      frequency: 0.0025,
-      speed: 0.00035,
-      phase: Math.PI * 0.5,
-      harmonics: [
-        { freq: 0.006, amp: 50, speed: 0.00025, phase: Math.PI * 0.8 },
-        { freq: 0.012, amp: 30, speed: 0.00045, phase: Math.PI * 0.2 },
-        { freq: 0.019, amp: 18, speed: 0.00065, phase: Math.PI * 1.3 },
-        { freq: 0.033, amp: 10, speed: 0.00085, phase: Math.PI * 0.6 }
-      ],
-      colorStop: 'accent'
-    },
-    {
-      baseY: h * 0.7,
-      amplitude: 70,
-      frequency: 0.0035,
-      speed: 0.0003,
-      phase: Math.PI * 0.8,
-      harmonics: [
-        { freq: 0.008, amp: 35, speed: 0.00035, phase: Math.PI * 1.0 },
-        { freq: 0.014, amp: 20, speed: 0.00055, phase: Math.PI * 0.4 },
-        { freq: 0.023, amp: 12, speed: 0.00075, phase: Math.PI * 0.9 },
-        { freq: 0.037, amp: 6, speed: 0.00095, phase: Math.PI * 1.7 }
-      ],
-      colorStop: 'primary'
-    }
-  ]
-}
-
-function getWaveY(layer: AuroraLayer, x: number, time: number, mouseRipple: number): number {
-  let y = layer.baseY
-  // Base wave
-  y += Math.sin(x * layer.frequency + time * layer.speed + layer.phase) * layer.amplitude
-  // Harmonic detail (Perlin-like multi-octave)
-  for (const h of layer.harmonics) {
-    y += Math.sin(x * h.freq + time * h.speed + h.phase) * h.amp
+  sakuraPetals = []
+  for (let i = 0; i < count; i++) {
+    sakuraPetals.push({
+      x: Math.random() * w * 1.2 - w * 0.1,  // slight overscan for natural entry
+      y: Math.random() * h * 1.3 - h * 0.15, // scattered across full height
+      fallSpeed: 0.25 + Math.random() * 0.7,
+      swayAmp: 0.4 + Math.random() * 2.0,
+      swayFreq: 0.006 + Math.random() * 0.014,
+      swayPhase: Math.random() * Math.PI * 2,
+      rotation: Math.random() * Math.PI * 2,
+      rotationSpeed: (Math.random() - 0.5) * 0.025,
+      size: 5 + Math.random() * 12,
+      opacity: 0.25 + Math.random() * 0.5,
+      petalType: Math.floor(Math.random() * 3),
+      colorVariant: Math.random(),
+      gustOffset: Math.random() * Math.PI * 2,
+      gustSpeed: 0.003 + Math.random() * 0.006
+    })
   }
-  // Mouse ripple
-  y += mouseRipple * 30
-  return y
 }
 
-function drawAurora(color: string, accentColor: string, time: number) {
+function updateSakura() {
+  const w = window.innerWidth
+  const h = window.innerHeight
+
+  for (const p of sakuraPetals) {
+    // Falling: constant downward speed
+    p.y += p.fallSpeed
+
+    // Horizontal sway: sine wave movement
+    // Phase advances based on time/position for natural look
+    p.swayPhase += 0.01
+    p.x += Math.sin(p.swayPhase * p.swayFreq * 100 + p.gustOffset) * p.swayAmp * 0.03
+
+    // Wind gust: occasional stronger horizontal push
+    p.gustOffset += p.gustSpeed
+    p.x += Math.sin(p.gustOffset) * 0.2
+
+    // Rotation
+    p.rotation += p.rotationSpeed
+
+    // Wrap: when petal falls below screen, reset to top
+    if (p.y > h + 30) {
+      p.y = -30
+      p.x = Math.random() * w * 1.2 - w * 0.1
+      p.swayPhase = Math.random() * Math.PI * 2
+    }
+    // Wrap horizontally
+    if (p.x > w + 40) p.x = -40
+    if (p.x < -40) p.x = w + 40
+  }
+}
+
+function drawSakuraPetals(accentColor: string) {
   if (!ctx) return
   const w = window.innerWidth
   const h = window.innerHeight
 
-  // Subtle overlay for persistence — adapt to theme
-  const isDark = themeStore.isDark
-  const overlayAlpha = isDark ? 0.06 : 0.08
-  const overlayRgb = isDark ? '0, 0, 0' : '255, 255, 255'
-  ctx.fillStyle = `rgba(${overlayRgb}, ${overlayAlpha})`
-  ctx.fillRect(0, 0, w, h)
+  // Clear canvas each frame
+  ctx.clearRect(0, 0, w, h)
 
-  // Mouse ripple calculation
-  const mouseRipple = mouseX > 0
-    ? Math.exp(-(Math.abs(mouseX - w / 2) / (w * 0.3))) *
-      Math.sin(time * 0.002) * 0.5
-    : 0
+  const alphaHex = (a: number) =>
+    Math.floor(Math.min(1, a) * 255).toString(16).padStart(2, '0')
 
-  for (let i = 0; i < auroraLayers.length; i++) {
-    const layer = auroraLayers[i]
-    const layerColor = layer.colorStop === 'primary' ? color : accentColor
+  // Sort petals by y for depth ordering (further = drawn first = behind)
+  // (natural order is fine since we iterate array order; no explicit sort needed for random)
 
-    // Sample wave at multiple x positions to build the gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, h)
-    const samples = 12
+  for (const p of sakuraPetals) {
+    // Interpolate petal color between pale and deep pink
+    const t = p.colorVariant
+    const pinkR = Math.floor(255)
+    const pinkG = Math.floor(183 - t * 51)   // 183 → 132
+    const pinkB = Math.floor(197 - t * 42)   // 197 → 155
+    const petalColor = `#${pinkR.toString(16).padStart(2, '0')}${pinkG.toString(16).padStart(2, '0')}${pinkB.toString(16).padStart(2, '0')}`
 
-    for (let s = 0; s <= samples; s++) {
-      const x = (s / samples) * w
-      const waveY = getWaveY(layer, x, time, mouseRipple)
-      const normalizedY = Math.max(0, Math.min(1, waveY / h))
+    ctx.save()
+    ctx.translate(p.x, p.y)
+    ctx.rotate(p.rotation)
 
-      // Build a glow band around the wave
-      const bandHalf = 0.08 + i * 0.02
-      // Above wave: fade to transparent
-      gradient.addColorStop(
-        Math.max(0, normalizedY - bandHalf * 1.5),
-        'transparent'
-      )
-      // Edge of glow
-      gradient.addColorStop(
-        Math.max(0, normalizedY - bandHalf),
-        `${layerColor}10`
-      )
-      // Core of wave
-      gradient.addColorStop(
-        normalizedY,
-        `${layerColor}${Math.floor(0.12 * 255).toString(16).padStart(2, '0')}`
-      )
-      // Below glow edge
-      gradient.addColorStop(
-        Math.min(1, normalizedY + bandHalf),
-        `${layerColor}10`
-      )
-      // Below wave: fade to transparent
-      gradient.addColorStop(
-        Math.min(1, normalizedY + bandHalf * 1.5),
-        'transparent'
-      )
+    const s = p.size
+
+    // Draw petal with subtle glow
+    const glowGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 1.5)
+    glowGrad.addColorStop(0, `${petalColor}${alphaHex(p.opacity * 0.3)}`)
+    glowGrad.addColorStop(1, 'transparent')
+    ctx.beginPath()
+    ctx.arc(0, 0, s * 1.5, 0, Math.PI * 2)
+    ctx.fillStyle = glowGrad
+    ctx.fill()
+
+    // Draw petal shape based on type
+    ctx.beginPath()
+    switch (p.petalType) {
+      case 0:
+        // Classic sakura petal: teardrop/heart shape via two bezier curves
+        ctx.moveTo(0, -s)
+        ctx.bezierCurveTo(s * 0.6, -s * 0.5, s * 0.7, s * 0.1, 0, s * 0.8)
+        ctx.bezierCurveTo(-s * 0.7, s * 0.1, -s * 0.6, -s * 0.5, 0, -s)
+        break
+      case 1:
+        // Rounder petal: wider ellipse-like shape
+        ctx.moveTo(0, -s * 0.9)
+        ctx.bezierCurveTo(s * 0.8, -s * 0.4, s * 0.5, s * 0.3, 0, s * 0.7)
+        ctx.bezierCurveTo(-s * 0.5, s * 0.3, -s * 0.8, -s * 0.4, 0, -s * 0.9)
+        break
+      case 2:
+        // Slim elegant petal with pointed tip
+        ctx.moveTo(0, -s)
+        ctx.bezierCurveTo(s * 0.35, -s * 0.5, s * 0.5, s * 0.2, 0, s * 0.6)
+        ctx.bezierCurveTo(-s * 0.5, s * 0.2, -s * 0.35, -s * 0.5, 0, -s)
+        break
     }
 
-    ctx.globalAlpha = 0.3
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, w, h)
-    ctx.globalAlpha = 1
+    // Fill petal with soft gradient
+    const petalGrad = ctx.createLinearGradient(0, -s, 0, s * 0.8)
+    petalGrad.addColorStop(0, `${petalColor}${alphaHex(p.opacity * 1.0)}`)
+    petalGrad.addColorStop(0.5, `${petalColor}${alphaHex(p.opacity * 0.85)}`)
+    petalGrad.addColorStop(1, `${petalColor}${alphaHex(p.opacity * 0.5)}`)
+    ctx.fillStyle = petalGrad
+    ctx.fill()
+
+    // Subtle vein line in center
+    ctx.beginPath()
+    ctx.moveTo(0, -s * 0.7)
+    ctx.lineTo(0, s * 0.5)
+    ctx.strokeStyle = `${accentColor}${alphaHex(p.opacity * 0.2)}`
+    ctx.lineWidth = 0.5
+    ctx.stroke()
+
+    ctx.restore()
   }
 }
 
@@ -642,9 +676,11 @@ function createParticles() {
   const count = props.config.maxParticles
   burstParticles = []
   stardustParticles = []
+  sakuraPetals = []
   switch (props.config.type) {
     case 'constellation': createStardust(count); break
-    case 'aurora': createAurora(count); break
+    case 'aurora': // migrated to sakura
+    case 'sakura': createSakura(count); break
     case 'matrix': createMatrix(count); break
     case 'none': particles = []; break
   }
@@ -666,8 +702,10 @@ function animate(time: number) {
       updateStardust()
       drawStardust(props.config.color)
       break
-    case 'aurora':
-      drawAurora(props.config.color, props.config.accentColor, time)
+    case 'aurora': // migrated to sakura
+    case 'sakura':
+      updateSakura()
+      drawSakuraPetals(props.config.accentColor || props.config.color)
       break
     case 'matrix':
       updateMatrix()
@@ -707,7 +745,7 @@ function restartSystem() {
   burstParticles = []
   trailParticles = []
   stardustParticles = []
-  auroraLayers = []
+  sakuraPetals = []
   flowField = []
   // 4. Rebuild particles
   createParticles()

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, h } from 'vue'
-import { NButton, NIcon, NDropdown, useDialog } from 'naive-ui'
-import { ChevronForward, Add, Trash, Create, FolderOpen } from '@vicons/ionicons5'
+import { ref, computed, h, nextTick } from 'vue'
+import { NButton, NIcon, NDropdown, NInput, useDialog } from 'naive-ui'
+import { ChevronForward, Add, Trash, Create, FolderOpen, Checkmark, Close } from '@vicons/ionicons5'
 import { useCollectionStore } from '@/stores/collection'
 import RequestItem from './RequestItem.vue'
 import type { Collection } from '@/db/models'
@@ -11,6 +11,8 @@ const store = useCollectionStore()
 const dialog = useDialog()
 const expanded = ref(true)
 const dragOver = ref(false)
+const editing = ref(false)
+const editName = ref('')
 
 const childCollections = computed(() => store.collections.filter(c => c.parentId === props.collection.id))
 const childRequests = computed(() => store.requests.filter(r => r.collectionId === props.collection.id))
@@ -29,10 +31,7 @@ async function handleSelect(key: string) {
   } else if (key === 'new-folder' && props.collection.id) {
     await store.createCollection('新建子集合', props.collection.id)
   } else if (key === 'rename' && props.collection.id) {
-    const newName = window.prompt('输入新名称：', props.collection.name)
-    if (newName && newName.trim()) {
-      await store.updateCollection(props.collection.id, { name: newName.trim() })
-    }
+    startRename()
   } else if (key === 'delete' && props.collection.id) {
     const childCount = childCollections.value.length + childRequests.value.length
     dialog.warning({
@@ -47,6 +46,30 @@ async function handleSelect(key: string) {
       }
     })
   }
+}
+
+// ====== Inline Rename ======
+function startRename() {
+  editName.value = props.collection.name
+  editing.value = true
+  // Focus the input after it renders
+  nextTick(() => {
+    const input = document.querySelector('.rename-input') as HTMLInputElement | null
+    input?.focus()
+    input?.select()
+  })
+}
+
+async function confirmRename() {
+  const trimmed = editName.value.trim()
+  if (trimmed && trimmed !== props.collection.name && props.collection.id) {
+    await store.updateCollection(props.collection.id, { name: trimmed })
+  }
+  editing.value = false
+}
+
+function cancelRename() {
+  editing.value = false
 }
 
 // ====== Drag & Drop ======
@@ -121,7 +144,23 @@ async function onDrop(e: DragEvent) {
       <n-button text size="tiny" @click="expanded = !expanded" class="chevron-btn">
         <template #icon><n-icon :class="{ rotated: expanded }" class="chevron"><ChevronForward /></n-icon></template>
       </n-button>
-      <n-dropdown trigger="click" :options="contextMenuOptions" @select="handleSelect">
+      <template v-if="editing">
+        <n-input
+          v-model:value="editName"
+          size="tiny"
+          class="rename-input"
+          @keyup.enter="confirmRename"
+          @keyup.esc="cancelRename"
+          @blur="confirmRename"
+        />
+        <n-button text size="tiny" @click="confirmRename" class="confirm-btn">
+          <template #icon><n-icon><Checkmark /></n-icon></template>
+        </n-button>
+        <n-button text size="tiny" @click="cancelRename">
+          <template #icon><n-icon><Close /></n-icon></template>
+        </n-button>
+      </template>
+      <n-dropdown v-else trigger="click" :options="contextMenuOptions" @select="handleSelect">
         <span class="collection-name">📁 {{ collection.name }}</span>
       </n-dropdown>
       <n-button text size="tiny" @click="store.createRequest(collection.id!)" class="add-btn">
@@ -156,4 +195,6 @@ async function onDrop(e: DragEvent) {
 .collection-header:hover .chevron-btn,
 .collection-header:hover .add-btn { opacity: 1; }
 .collection-children { border-left: 1px solid var(--app-guide-line); margin-left: 20px; }
+.rename-input { flex: 1; min-width: 80px; }
+.confirm-btn { color: var(--app-success, #18a058); }
 </style>

@@ -1,7 +1,7 @@
 // src/animations/tokens.ts
 
 /** 粒子背景类型 */
-export type ParticleType = 'constellation' | 'aurora' | 'matrix' | 'none'
+export type ParticleType = 'constellation' | 'aurora' | 'matrix' | 'sakura' | 'none'
 
 /** UI 动画强度级别 */
 export type AnimationLevel = 'none' | 'subtle' | 'moderate' | 'energetic'

@@ -1,4 +1,65 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect width="32" height="32" rx="6" fill="#1890ff"/>
-  <text x="16" y="22" text-anchor="middle" fill="white" font-size="18" font-family="monospace" font-weight="bold">API</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <!-- 背景渐变 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5"/>
+      <stop offset="100%" style="stop-color:#7C3AED"/>
+    </linearGradient>
+    <!-- 亮色渐变 -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#A5B4FC"/>
+      <stop offset="100%" style="stop-color:#C4B5FD"/>
+    </linearGradient>
+    <!-- 阴影 -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="12" flood-color="#1E1B4B" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- 圆角方形背景 -->
+  <rect x="64" y="64" width="896" height="896" rx="192" ry="192" fill="url(#bgGrad)"/>
+
+  <!-- API 网络节点连接线 -->
+  <g stroke="url(#accentGrad)" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.7">
+    <!-- 左节点到中节点 -->
+    <line x1="280" y1="420" x2="420" y2="350"/>
+    <line x1="280" y1="420" x2="420" y2="520"/>
+    <line x1="280" y1="420" x2="420" y2="680"/>
+    <!-- 中节点到右节点 -->
+    <line x1="620" y1="350" x2="760" y2="420"/>
+    <line x1="620" y1="520" x2="760" y2="420"/>
+    <line x1="620" y1="680" x2="760" y2="420"/>
+  </g>
+
+  <!-- 端点节点（左侧大圆） -->
+  <circle cx="280" cy="420" r="48" fill="#1E1B4B" stroke="url(#accentGrad)" stroke-width="6" filter="url(#shadow)"/>
+  <circle cx="280" cy="420" r="18" fill="#C4B5FD"/>
+
+  <!-- 端点节点（右侧大圆） -->
+  <circle cx="760" cy="420" r="48" fill="#1E1B4B" stroke="url(#accentGrad)" stroke-width="6" filter="url(#shadow)"/>
+  <circle cx="760" cy="420" r="18" fill="#C4B5FD"/>
+
+  <!-- 中间服务节点 -->
+  <circle cx="512" cy="350" r="32" fill="#1E1B4B" stroke="url(#accentGrad)" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="512" cy="350" r="10" fill="#A5B4FC"/>
+
+  <circle cx="512" cy="520" r="32" fill="#1E1B4B" stroke="url(#accentGrad)" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="512" cy="520" r="10" fill="#A5B4FC"/>
+
+  <circle cx="512" cy="680" r="32" fill="#1E1B4B" stroke="url(#accentGrad)" stroke-width="5" filter="url(#shadow)"/>
+  <circle cx="512" cy="680" r="10" fill="#A5B4FC"/>
+
+  <!-- 请求/响应箭头 -->
+  <g fill="none" stroke="#E0E7FF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6">
+    <!-- 上行箭头 -->
+    <path d="M420 320 L450 290 L480 320"/>
+    <path d="M450 290 L450 260"/>
+    <!-- 下行箭头 -->
+    <path d="M620 710 L650 740 L680 710"/>
+    <path d="M650 740 L650 770"/>
+  </g>
+
+  <!-- 底部小字装饰 -->
+  <text x="512" y="880" font-family="'Segoe UI', Arial, sans-serif" font-size="72" font-weight="700"
+        fill="#E0E7FF" text-anchor="middle" opacity="0.5" letter-spacing="8">API</text>
 </svg>

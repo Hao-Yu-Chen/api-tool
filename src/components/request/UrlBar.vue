@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, h } from 'vue'
+import { computed, ref, h, watch } from 'vue'
 import { NInput, NSelect, NButton, NSpace, NIcon, NDropdown } from 'naive-ui'
 import { Play, SaveOutline } from '@vicons/ionicons5'
 import type { HttpMethod, AuthConfig, KeyValuePair } from '@/db/models'
@@ -45,6 +45,99 @@ const activeRequestName = computed(() => collectionStore.activeRequest?.name || 
 const saveAsOptions = [
   { label: '另存为…', key: 'save-as', icon: () => h(NIcon, null, { default: () => h(SaveOutline) }) }
 ]
+
+// ====== URL ↔ Params bidirectional sync ======
+// Prevent infinite loop by tracking which side initiated the change
+const syncingFrom = ref<'url' | 'params' | null>(null)
+
+/** Parse query string from URL into KeyValuePair array */
+function parseQueryParams(url: string): KeyValuePair[] {
+  const qIndex = url.indexOf('?')
+  if (qIndex === -1 || qIndex === url.length - 1) return []
+  const qs = url.slice(qIndex + 1)
+  // Remove hash fragment if present
+  const hashIndex = qs.indexOf('#')
+  const cleanQs = hashIndex === -1 ? qs : qs.slice(0, hashIndex)
+  if (!cleanQs) return []
+  const searchParams = new URLSearchParams(cleanQs)
+  const params: KeyValuePair[] = []
+  let i = 0
+  searchParams.forEach((value, key) => {
+    params.push({ id: `qs-${i++}`, key, value, enabled: true })
+  })
+  return params
+}
+
+/** Build URL by replacing query string with current params */
+function buildUrlWithParams(baseUrl: string, params: KeyValuePair[]): string {
+  // Strip existing query string and hash
+  const qIndex = baseUrl.indexOf('?')
+  const hashIndex = baseUrl.indexOf('#')
+  let cleanUrl: string
+  let hash = ''
+  if (hashIndex !== -1) {
+    hash = baseUrl.slice(hashIndex)
+    cleanUrl = qIndex !== -1 ? baseUrl.slice(0, qIndex) : baseUrl.slice(0, hashIndex)
+  } else {
+    cleanUrl = qIndex !== -1 ? baseUrl.slice(0, qIndex) : baseUrl
+  }
+  const enabledParams = params.filter(p => p.enabled && p.key)
+  if (enabledParams.length === 0) return cleanUrl + hash
+  const qs = new URLSearchParams()
+  for (const p of enabledParams) {
+    qs.append(p.key, p.value)
+  }
+  return `${cleanUrl}?${qs.toString()}${hash}`
+}
+
+/** Compare two param arrays for equality (ignoring id field) */
+function paramsEqual(a: KeyValuePair[], b: KeyValuePair[]): boolean {
+  const aEnabled = a.filter(p => p.enabled && p.key)
+  const bEnabled = b.filter(p => p.enabled && p.key)
+  if (aEnabled.length !== bEnabled.length) return false
+  return aEnabled.every((pa, i) =>
+    pa.key === bEnabled[i].key && pa.value === bEnabled[i].value
+  )
+}
+
+// When URL changes → sync to params
+watch(currentUrl, (newUrl) => {
+  if (syncingFrom.value === 'params') return // params initiated this change, skip
+  const req = collectionStore.activeRequest
+  if (!req) return
+  const parsed = parseQueryParams(newUrl)
+  // Only update if params actually differ
+  if (!paramsEqual(parsed, req.params)) {
+    syncingFrom.value = 'url'
+    // Merge: keep existing param metadata (id, description) where keys match
+    const merged: KeyValuePair[] = parsed.map(pp => {
+      const existing = req.params.find(ep => ep.key === pp.key)
+      return existing
+        ? { ...pp, id: existing.id, description: existing.description }
+        : pp
+    })
+    req.params = merged
+    // Reset flag after current tick so subsequent changes are tracked
+    Promise.resolve().then(() => { syncingFrom.value = null })
+  }
+})
+
+// When params change → sync to URL
+watch(
+  () => collectionStore.activeRequest?.params,
+  (newParams) => {
+    if (syncingFrom.value === 'url') return // URL initiated this change, skip
+    if (!newParams || !collectionStore.activeRequest) return
+    const req = collectionStore.activeRequest
+    const newUrl = buildUrlWithParams(req.url, newParams)
+    if (newUrl !== req.url) {
+      syncingFrom.value = 'params'
+      req.url = newUrl
+      Promise.resolve().then(() => { syncingFrom.value = null })
+    }
+  },
+  { deep: true }
+)
 
 /** Apply auth config to request headers (mutates the headers array) */
 function applyAuth(headers: KeyValuePair[], auth: AuthConfig): void {
@@ -145,10 +238,24 @@ async function handleSend() {
     applyAuth(headers, req.auth)
     const mergedHeaders = mergeHeaders(headers)
 
+    // Build params: request params + API key query param (if auth uses query)
+    const params = JSON.parse(JSON.stringify(req.params))
+    if (req.auth.type === 'api-key' && req.auth.apiKey?.key && (req.auth.apiKey.addTo || 'header') === 'query') {
+      // Avoid duplicates
+      const hasParam = params.some((p: KeyValuePair) => p.enabled && p.key === req.auth.apiKey!.key)
+      if (!hasParam) {
+        params.push({ id: 'auth-apikey-query', key: req.auth.apiKey.key, value: req.auth.apiKey.value || '', enabled: true })
+      }
+    }
+
     const resolvedUrl = resolveUrl(replace(req.url))
     console.log('[UrlBar] resolved URL:', resolvedUrl)
     const result = await send({
-      method: req.method, url: resolvedUrl, headers: mergedHeaders, body: JSON.parse(JSON.stringify(req.body))
+      method: req.method,
+      url: resolvedUrl,
+      headers: mergedHeaders,
+      params,
+      body: JSON.parse(JSON.stringify(req.body))
     })
     console.log('[UrlBar] send result:', result.status, result.duration + 'ms')
 
@@ -177,10 +284,11 @@ async function handleSend() {
       <n-space :size="0" :wrap="false" class="url-main-group">
         <n-select
           v-model:value="currentMethod" :consistent-menu-width="false"
-          :options="methods.map(m => ({ label: m, value: m }))" style="width: 110px"
+          :options="methods.map(m => ({ label: m, value: m }))" style="width: 100px; flex-shrink: 0"
+          size="large"
         />
-        <n-input v-model:value="currentUrl" placeholder="输入请求 URL，如 {{base_url}}/api/users" class="url-input" />
-        <n-button type="primary" :loading="loading" @click="handleSend" class="send-btn ripple-btn">
+        <n-input v-model:value="currentUrl" placeholder="输入请求 URL，如 {{base_url}}/api/users" class="url-input" size="large" />
+        <n-button type="primary" :loading="loading" @click="handleSend" class="send-btn ripple-btn" size="large">
           <template #icon><n-icon><Play /></n-icon></template>
           发送
         </n-button>
@@ -217,7 +325,7 @@ async function handleSend() {
 
 <style scoped>
 .url-bar {
-  padding: 8px 16px 6px;
+  padding: 12px 12px 8px;
 }
 
 .url-top-row {
@@ -228,7 +336,10 @@ async function handleSend() {
   width: 100%;
 }
 
-.url-input { flex: 1; }
+.url-input {
+  flex: 1 1 auto;
+  min-width: 400px;
+}
 
 .send-btn {
   border-radius: 0 4px 4px 0;

@@ -5,6 +5,7 @@ export interface SendRequestParams {
   method: HttpMethod
   url: string
   headers: KeyValuePair[]
+  params: KeyValuePair[]
   body: RequestBody
 }
 
@@ -113,7 +114,27 @@ export function useRequest() {
         bodyInit = params.body.raw
       }
 
-      const res = await fetch(params.url, {
+      // Build query string from params and append to URL
+      // Strip existing query string first to prevent double-appending
+      // (bidirectional sync already writes params into URL for display)
+      let finalUrl = params.url
+      const qIndex = finalUrl.indexOf('?')
+      if (qIndex !== -1) {
+        finalUrl = finalUrl.slice(0, qIndex)
+      }
+      const enabledParams = (params.params || []).filter(p => p.enabled && p.key)
+      if (enabledParams.length > 0) {
+        const qs = new URLSearchParams()
+        for (const p of enabledParams) {
+          qs.append(p.key, p.value)
+        }
+        const qsStr = qs.toString()
+        if (qsStr) {
+          finalUrl += '?' + qsStr
+        }
+      }
+
+      const res = await fetch(finalUrl, {
         method: params.method,
         headers: headersObj,
         body: bodyInit

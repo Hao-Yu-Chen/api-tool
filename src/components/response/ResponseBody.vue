@@ -46,6 +46,12 @@ watch(() => props.body, () => { bodyVersion.value++ })
 </template>
 
 <style scoped>
-.response-body { padding: 0; }
+.response-body {
+  padding: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .empty-body { text-align: center; color: var(--app-text-disabled); padding: 32px; font-size: 13px; }
 </style>
