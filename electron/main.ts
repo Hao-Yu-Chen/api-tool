@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu, shell, dialog } from 'electron'
 import { join } from 'path'
 import Store from 'electron-store'
 import { createTray } from './tray'
-import { registerIpcHandlers } from './ipc-handlers'
+import { registerIpcHandlers, cleanupProxy } from './ipc-handlers'
 
 interface StoreSchema {
   desktop: {
@@ -40,6 +40,7 @@ let tray: ReturnType<typeof createTray> | null = null
 
 function quitApp(): void {
   isQuitting = true
+  cleanupProxy()
   if (tray) {
     tray.destroy()
     tray = null
@@ -242,6 +243,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  cleanupProxy()
   if (tray) {
     tray.destroy()
     tray = null

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import type { Collection, ApiRequest, Environment, HistoryEntry, AppSettings } from './models'
+import type { Collection, ApiRequest, Environment, HistoryEntry, AppSettings, ProxyRule } from './models'
 
 class ApiToolDB extends Dexie {
   collections!: Table<Collection, number>
@@ -7,6 +7,7 @@ class ApiToolDB extends Dexie {
   environments!: Table<Environment, number>
   history!: Table<HistoryEntry, number>
   settings!: Table<AppSettings, number>
+  proxyRules!: Table<ProxyRule, number>
 
   constructor() {
     super('apitool')
@@ -16,6 +17,14 @@ class ApiToolDB extends Dexie {
       environments: '++id, name',
       history: '++id, timestamp',
       settings: '++id'
+    })
+    this.version(2).stores({
+      collections: '++id, parentId, order',
+      requests: '++id, collectionId, order',
+      environments: '++id, name',
+      history: '++id, timestamp',
+      settings: '++id',
+      proxyRules: '++id, enabled, order'
     })
   }
 

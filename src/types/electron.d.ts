@@ -25,6 +25,22 @@ declare global {
       showNotification: (title: string, body: string) => void
       /** 获取应用版本号 */
       getAppVersion: () => Promise<string>
+      /** 代理功能 */
+      proxy: ProxyAPI
     }
   }
+}
+
+/** 代理 API */
+export interface ProxyAPI {
+  /** 启动代理服务器 */
+  start(port: number, rules: unknown[]): Promise<{ success: boolean; error?: string }>
+  /** 停止代理服务器 */
+  stop(): Promise<{ success: boolean; error?: string }>
+  /** 获取代理运行状态 */
+  status(): Promise<{ running: boolean; port: number; ruleCount: number }>
+  /** 运行时更新规则 */
+  updateRules(rules: unknown[]): Promise<{ success: boolean }>
+  /** 检查端口是否可用 */
+  checkPort(port: number): Promise<{ available: boolean }>
 }

@@ -95,6 +95,18 @@ export interface HistoryEntry {
   timestamp: number
 }
 
+// ========== 代理规则 ==========
+export interface ProxyRule {
+  id?: number
+  name: string
+  sourcePattern: string
+  targetAddress: string
+  enabled: boolean
+  order: number
+  createdAt: number
+  updatedAt: number
+}
+
 // ========== 全局设置 ==========
 export interface AppSettings {
   id?: number

@@ -27,5 +27,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('open-file', (_event, filePath: string) => {
       callback(filePath)
     })
+  },
+
+  // 代理功能
+  proxy: {
+    start: (port: number, rules: unknown[]) => {
+      return ipcRenderer.invoke('proxy:start', port, rules)
+    },
+    stop: () => {
+      return ipcRenderer.invoke('proxy:stop')
+    },
+    status: () => {
+      return ipcRenderer.invoke('proxy:status')
+    },
+    updateRules: (rules: unknown[]) => {
+      return ipcRenderer.invoke('proxy:update-rules', rules)
+    },
+    checkPort: (port: number) => {
+      return ipcRenderer.invoke('proxy:check-port', port)
+    }
   }
 })
