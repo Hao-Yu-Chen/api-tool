@@ -115,6 +115,8 @@ function handleNewRequest() {
   flex-direction: column;
   border-bottom: 3px solid var(--app-border);
   background: var(--app-panel-bg);
+  overflow: hidden;
+  max-height: calc(100% - 200px);
 }
 .section-label {
   padding: 6px 16px;
@@ -130,6 +132,11 @@ function handleNewRequest() {
 
 .request-content {
   background: var(--app-panel-bg);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 空状态 */

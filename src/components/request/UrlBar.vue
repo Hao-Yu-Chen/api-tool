@@ -255,7 +255,8 @@ async function handleSend() {
       url: resolvedUrl,
       headers: mergedHeaders,
       params,
-      body: JSON.parse(JSON.stringify(req.body))
+      body: JSON.parse(JSON.stringify(req.body)),
+      files: collectionStore.getFileRegistry()
     })
     console.log('[UrlBar] send result:', result.status, result.duration + 'ms')
 

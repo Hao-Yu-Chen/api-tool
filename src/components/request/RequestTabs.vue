@@ -27,6 +27,12 @@ import AuthEditor from './AuthEditor.vue'
 
 <style scoped>
 .request-tabs-wrapper { background: var(--app-panel-bg); }
-.request-tabs-wrapper :deep(.n-tabs-nav) { padding-left: 12px; }
-.tab-panel { padding: 8px 0; min-height: 120px; }
+.request-tabs-wrapper :deep(.n-tabs-nav) {
+  padding-left: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--app-panel-bg);
+}
+.tab-panel { padding: 8px 0; min-height: 120px; overflow: hidden; }
 </style>

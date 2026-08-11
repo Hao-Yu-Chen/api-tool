@@ -7,6 +7,8 @@ export interface SendRequestParams {
   headers: KeyValuePair[]
   params: KeyValuePair[]
   body: RequestBody
+  /** File objects for form-data and binary uploads (in-memory only) */
+  files?: ReadonlyMap<string, File>
 }
 
 export interface ResponseData {
@@ -96,10 +98,23 @@ export function useRequest() {
         bodyInit = params.body.raw
       } else if (params.body.type === 'form-data' && params.body.formData) {
         const fd = new FormData()
+        let hasFile = false
         for (const item of params.body.formData) {
           if (item.enabled && item.key) {
-            fd.append(item.key, item.value)
+            if (item.type === 'file') {
+              const file = params.files?.get(item.id)
+              if (file) {
+                fd.append(item.key, file, item.fileName || file.name)
+                hasFile = true
+              }
+            } else {
+              fd.append(item.key, item.value)
+            }
           }
+        }
+        // Let browser set Content-Type with multipart boundary when files are attached
+        if (hasFile) {
+          headersObj.delete('Content-Type')
         }
         bodyInit = fd
       } else if (params.body.type === 'x-www-form-urlencoded' && params.body.urlEncoded) {

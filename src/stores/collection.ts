@@ -31,6 +31,11 @@ export const useCollectionStore = defineStore('collection', () => {
   const activeRequest = ref<ApiRequest | null>(null)
   const loading = ref(false)
 
+  // ====== File objects (in-memory only, NOT persisted to IndexedDB) ======
+  /** File objects for form-data rows, keyed by row ID.
+   *  Deliberately NOT reactive — File objects can misbehave inside Vue proxies. */
+  const fileRegistry = new Map<string, File>()
+
   // ====== Tab state ======
   const tabs = ref<TabState[]>([])
   const activeTabId = ref<string | null>(null)
@@ -193,6 +198,20 @@ export const useCollectionStore = defineStore('collection', () => {
   function closeTab(tabId: string): void {
     const idx = tabs.value.findIndex(t => t.id === tabId)
     if (idx === -1) return
+
+    // Clean up any File objects associated with this tab's request body
+    const tab = tabs.value[idx]
+    if (tab) {
+      const formData = tab.request.body.formData
+      if (formData) {
+        for (const item of formData) {
+          if (item.type === 'file' && item.id) {
+            fileRegistry.delete(item.id)
+          }
+        }
+      }
+    }
+
     tabs.value.splice(idx, 1)
     if (activeTabId.value === tabId) {
       const newIdx = Math.min(idx, tabs.value.length - 1)
@@ -215,6 +234,27 @@ export const useCollectionStore = defineStore('collection', () => {
   /** Get tab by ID */
   function getTab(tabId: string): TabState | undefined {
     return tabs.value.find(t => t.id === tabId)
+  }
+
+  // ====== File object management (in-memory, not persisted) ======
+
+  /** Register a File object for a form-data row */
+  function registerFile(id: string, file: File | null): void {
+    if (file) {
+      fileRegistry.set(id, file)
+    } else {
+      fileRegistry.delete(id)
+    }
+  }
+
+  /** Get a single File by row ID */
+  function getFile(id: string): File | undefined {
+    return fileRegistry.get(id)
+  }
+
+  /** Get the file registry for sending (returns the Map directly — use read-only) */
+  function getFileRegistry(): ReadonlyMap<string, File> {
+    return fileRegistry
   }
 
   // ====== Active request ======
@@ -282,6 +322,10 @@ export const useCollectionStore = defineStore('collection', () => {
     openTab,
     closeTab,
     setTabResponse,
-    getTab
+    getTab,
+    fileRegistry,
+    registerFile,
+    getFile,
+    getFileRegistry
   }
 })

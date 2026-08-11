@@ -33,6 +33,10 @@ const urlEncoded = computed({
   get: () => store.activeRequest?.body.urlEncoded || [],
   set: (v) => { if (store.activeRequest) store.activeRequest.body.urlEncoded = v }
 })
+
+function onFileChange({ id, file }: { id: string; file: File | null }) {
+  store.registerFile(id, file)
+}
 </script>
 
 <template>
@@ -51,7 +55,13 @@ const urlEncoded = computed({
       <div class="editor-area">
         <JsonTreeViewer v-if="bodyType === 'json'" v-model="rawBody" language="json" :readonly="false" />
         <CodeEditor v-else-if="bodyType === 'raw'" v-model="rawBody" language="text" />
-        <KeyValueEditor v-else-if="bodyType === 'form-data'" v-model="formData" show-description />
+        <KeyValueEditor
+          v-else-if="bodyType === 'form-data'"
+          v-model="formData"
+          show-description
+          allow-files
+          @file-change="onFileChange"
+        />
         <KeyValueEditor v-else-if="bodyType === 'x-www-form-urlencoded'" v-model="urlEncoded" show-description />
       </div>
     </template>

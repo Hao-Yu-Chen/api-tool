@@ -36,6 +36,10 @@ export interface KeyValuePair {
   value: string
   enabled: boolean
   description?: string
+  /** 'text' = plain text value, 'file' = file upload (only valid in form-data) */
+  type?: 'text' | 'file'
+  /** Original filename when type is 'file' (for display; File object is kept in-memory) */
+  fileName?: string
 }
 
 export interface RequestBody {
