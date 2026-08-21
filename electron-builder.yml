@@ -7,6 +7,10 @@ directories:
 files:
   - out/**/*
 
+extraResources:
+  - from: build/icon.png
+    to: icon.png
+
 win:
   target:
     - target: nsis

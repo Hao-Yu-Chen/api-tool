@@ -1,19 +1,30 @@
-import { Tray, Menu, nativeImage } from 'electron'
+import { Tray, Menu, nativeImage, app } from 'electron'
 import { join } from 'path'
 import type { BrowserWindow } from 'electron'
+import { resolveTrayIconPath } from './tray-icon-path'
 
 let tray: Tray | null = null
 
+/** 16x16 纯色占位图标（#3B82F6）——图标文件缺失时保证托盘图标可见 */
+const PLACEHOLDER_ICON_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGUlEQVR4nGOwbvr2nxLMMGrAqAGjBgwXAwCGGLIfFYFKqwAAAABJRU5ErkJggg=='
+
 export function createTray(mainWindow: BrowserWindow, onQuit: () => void): Tray {
-  // 使用 16x16 图标（从 ICO 或 PNG 创建）
-  const iconPath = join(__dirname, '../build/icon.png')
-  let icon: nativeImage
-  try {
-    icon = nativeImage.createFromPath(iconPath)
-    if (icon.isEmpty()) throw new Error('icon empty')
-  } catch {
-    // 如果图标文件不存在，创建一个简单的 16x16 占位图标
-    icon = nativeImage.createEmpty()
+  // 打包后图标位于 resources/icon.png（electron-builder extraResources 复制），
+  // 开发模式回退到项目 build/icon.png
+  const iconPath = resolveTrayIconPath({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    devDir: join(__dirname, '../..')
+  })
+
+  let icon: Electron.NativeImage
+  if (iconPath) {
+    const loaded = nativeImage.createFromPath(iconPath)
+    icon = loaded.isEmpty() ? nativeImage.createFromDataURL(PLACEHOLDER_ICON_DATA_URL) : loaded
+  } else {
+    // 空图标在 Windows 托盘不可见——必须用可见占位图标兜底
+    icon = nativeImage.createFromDataURL(PLACEHOLDER_ICON_DATA_URL)
   }
 
   tray = new Tray(icon.resize({ width: 16, height: 16 }))
