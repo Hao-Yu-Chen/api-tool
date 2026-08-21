@@ -33,17 +33,44 @@ const BINARY_CONTENT_TYPES = [
   'application/gzip',
   'application/x-tar',
   'application/x-rar-compressed',
+  'application/x-7z-compressed',
+  'application/x-xz',
+  'application/x-bzip2',
   'image/',
   'audio/',
   'video/',
   'font/',
   'application/vnd.',
   'application/x-msdownload',
-  'application/x-apple-diskimage'
+  'application/x-apple-diskimage',
+  'application/x-protobuf',
+  'application/protobuf',
+  'application/wasm',
+  'application/x-sqlite3',
+  'text/csv',
+  'text/tab-separated-values'
 ]
 
 function isBinaryContentType(contentType: string): boolean {
   return BINARY_CONTENT_TYPES.some(prefix => contentType.startsWith(prefix))
+}
+
+/**
+ * Content sniffing fallback for binary detection:
+ * headers may be wrong or missing, so scan the first 8KB for NUL bytes
+ * or invalid UTF-8 sequences — strong signals of binary data.
+ */
+function sniffBinary(buffer: ArrayBuffer): boolean {
+  const head = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 8192))
+  for (const byte of head) {
+    if (byte === 0) return true
+  }
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(head)
+    return false
+  } catch {
+    return true
+  }
 }
 
 function parseFileName(headers: Record<string, string>, url: string): string | null {
@@ -73,10 +100,6 @@ export function useRequest() {
   async function send(params: SendRequestParams): Promise<ResponseData> {
     loading.value = true
     error.value = null
-    // Revoke previous blob URL if any
-    if (response.value?.blobUrl) {
-      URL.revokeObjectURL(response.value.blobUrl)
-    }
     response.value = null
 
     const startTime = performance.now()
@@ -166,26 +189,28 @@ export function useRequest() {
 
       const contentType = respHeaders['content-type'] || ''
       const contentDisposition = respHeaders['content-disposition'] || ''
-      const isBin = isBinaryContentType(contentType) || contentDisposition.includes('attachment')
+
+      const buffer = await res.arrayBuffer()
+      const size = buffer.byteLength
+      const isBin = isBinaryContentType(contentType)
+        || contentDisposition.includes('attachment')
+        || sniffBinary(buffer)
 
       let textBody = ''
       let blobUrl: string | null = null
-      let size = 0
       const fileName = parseFileName(respHeaders, params.url)
 
       if (isBin) {
-        const blob = await res.blob()
-        size = blob.size
+        const blob = new Blob([buffer], { type: contentType || undefined })
         blobUrl = URL.createObjectURL(blob)
         // Also store text for preview if it's small enough
-        if (blob.size < 1024 * 1024) {
-          textBody = await blob.text().catch(() => '[Binary data]')
+        if (size < 1024 * 1024) {
+          textBody = new TextDecoder().decode(buffer)
         } else {
-          textBody = `[Binary data: ${(blob.size / 1024).toFixed(1)} KB]`
+          textBody = `[Binary data: ${(size / 1024).toFixed(1)} KB]`
         }
       } else {
-        textBody = await res.text()
-        size = new Blob([textBody]).size
+        textBody = new TextDecoder().decode(buffer)
       }
 
       const data: ResponseData = {

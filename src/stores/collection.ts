@@ -210,6 +210,10 @@ export const useCollectionStore = defineStore('collection', () => {
           }
         }
       }
+      // Release the tab's binary response blob — it's referenced nowhere else
+      if (tab.response?.blobUrl) {
+        URL.revokeObjectURL(tab.response.blobUrl)
+      }
     }
 
     tabs.value.splice(idx, 1)
@@ -228,7 +232,12 @@ export const useCollectionStore = defineStore('collection', () => {
 
   function setTabResponse(tabId: string, response: ResponseData): void {
     const tab = tabs.value.find(t => t.id === tabId)
-    if (tab) tab.response = { ...response }
+    if (!tab) return
+    // Revoke the replaced response's blob — it's no longer referenced anywhere
+    if (tab.response?.blobUrl && tab.response.blobUrl !== response.blobUrl) {
+      URL.revokeObjectURL(tab.response.blobUrl)
+    }
+    tab.response = { ...response }
   }
 
   /** Get tab by ID */

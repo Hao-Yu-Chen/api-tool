@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount, watch, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { NTabs, NTabPane, NButton, NIcon } from 'naive-ui'
 import { DownloadOutline } from '@vicons/ionicons5'
 import ResponseMeta from './ResponseMeta.vue'
@@ -18,13 +18,7 @@ function setResponse(data: ResponseData) { internalResp.value = data }
 function clearResponse() { internalResp.value = null }
 defineExpose({ setResponse, clearResponse })
 
-// Revoke blob URL when response changes or component unmounts
-watch(() => resp.value?.blobUrl, (newUrl, oldUrl) => {
-  if (oldUrl) URL.revokeObjectURL(oldUrl)
-})
-onBeforeUnmount(() => {
-  if (resp.value?.blobUrl) URL.revokeObjectURL(resp.value.blobUrl)
-})
+// blobUrl 生命周期归 collection store 管理（响应保存在 tab 状态中，切回标签页时仍可下载）
 
 function handleDownload() {
   if (!resp.value?.blobUrl) return

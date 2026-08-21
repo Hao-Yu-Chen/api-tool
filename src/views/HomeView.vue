@@ -74,7 +74,6 @@ function handleNewRequest() {
             <Transition name="slide-up" mode="out-in">
               <ResponseViewer
                 v-if="collectionStore.activeResponse"
-                :key="Date.now()"
                 ref="responseViewerRef"
                 :model-value="collectionStore.activeResponse"
               />
