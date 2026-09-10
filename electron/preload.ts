@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     checkPort: (port: number) => {
       return ipcRenderer.invoke('proxy:check-port', port)
+    },
+    systemState: () => {
+      return ipcRenderer.invoke('proxy:system-state')
     }
   }
 })

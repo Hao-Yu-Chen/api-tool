@@ -31,6 +31,17 @@ declare global {
   }
 }
 
+/** 当前系统代理配置（诊断用） */
+export interface SystemProxyState {
+  proxyEnable: string | null
+  proxyServer: string | null
+  proxyOverride: string | null
+  autoDetect: string | null
+  autoConfigURL: string | null
+  platform: string
+  supported: boolean
+}
+
 /** 代理 API */
 export interface ProxyAPI {
   /** 启动代理服务器 */
@@ -43,4 +54,6 @@ export interface ProxyAPI {
   updateRules(rules: unknown[]): Promise<{ success: boolean }>
   /** 检查端口是否可用 */
   checkPort(port: number): Promise<{ available: boolean }>
+  /** 读取当前系统代理配置 */
+  systemState(): Promise<SystemProxyState>
 }

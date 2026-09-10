@@ -31,6 +31,7 @@ onMounted(async () => {
   await store.loadRules()
   if (store.isElectron()) {
     await store.refreshStatus()
+    await store.refreshSystemState()
   }
   portInput.value = store.port
 })
@@ -85,11 +86,11 @@ async function handleStart() {
     return
   }
 
-  await store.startProxy()
-  if (store.isRunning) {
-    message.success('代理已启动')
+  const error = await store.startProxy()
+  if (error) {
+    message.error(`代理启动失败：${error}`, { duration: 6000 })
   } else {
-    message.error('代理启动失败')
+    message.success(`代理已启动，系统代理已指向 127.0.0.1:${store.port}`)
   }
 }
 
@@ -113,10 +114,22 @@ function handleCancelStop() {
   showStopConfirm.value = false
 }
 
+async function handleRefresh() {
+  await store.refreshStatus()
+  await store.refreshSystemState()
+}
+
 // ====== 计算属性 ======
 
 const sortedRules = computed(() => store.sortedRules)
 const enabledCount = computed(() => store.enabledRules.length)
+
+/** 代理运行中，但系统代理没有指向本应用端口 */
+const systemProxyMismatch = computed(() => {
+  if (!store.isRunning || !store.systemState) return false
+  const expected = `127.0.0.1:${store.port}`
+  return store.systemState.proxyServer !== expected
+})
 </script>
 
 <template>
@@ -167,7 +180,7 @@ const enabledCount = computed(() => store.enabledRules.length)
             text
             size="small"
             :disabled="!store.isElectron()"
-            @click="store.refreshStatus()"
+            @click="handleRefresh"
           >
             <template #icon><n-icon :component="Refresh" /></template>
           </n-button>
@@ -186,6 +199,34 @@ const enabledCount = computed(() => store.enabledRules.length)
           :disabled="store.isRunning"
           :show-button="false"
         />
+      </div>
+
+      <!-- 系统代理诊断 -->
+      <div v-if="store.systemState" class="diag-row">
+        <div class="diag-title">系统代理配置</div>
+        <div class="diag-item">
+          <span>启用</span>
+          <code>{{ store.systemState.proxyEnable ?? '未设置' }}</code>
+        </div>
+        <div class="diag-item">
+          <span>服务器</span>
+          <code>{{ store.systemState.proxyServer ?? '未设置' }}</code>
+        </div>
+        <div class="diag-item">
+          <span>绕过列表</span>
+          <code>{{ store.systemState.proxyOverride ?? '无' }}</code>
+        </div>
+        <div v-if="store.systemState.autoDetect" class="diag-item">
+          <span>自动检测</span>
+          <code>{{ store.systemState.autoDetect }}</code>
+        </div>
+        <div v-if="store.systemState.autoConfigURL" class="diag-item">
+          <span>PAC 脚本</span>
+          <code>{{ store.systemState.autoConfigURL }}</code>
+        </div>
+        <div v-if="systemProxyMismatch" class="diag-warn">
+          系统代理未指向本应用端口，请求不会经过本代理，请重新启动代理。
+        </div>
       </div>
     </div>
 
@@ -300,6 +341,46 @@ const enabledCount = computed(() => store.enabledRules.length)
 .port-label-text {
   font-size: 12px;
   color: var(--app-text-secondary);
+}
+
+/* 系统代理诊断 */
+.diag-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--app-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.diag-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+.diag-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--app-text-secondary);
+}
+.diag-item span {
+  flex: 0 0 60px;
+}
+.diag-item code {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--app-card-bg);
+  border: 1px solid var(--app-border-light);
+  font-size: 11px;
+  word-break: break-all;
+}
+.diag-warn {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--app-warning, #f0a020);
 }
 
 /* 规则列表 */

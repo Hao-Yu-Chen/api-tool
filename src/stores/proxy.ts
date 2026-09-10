@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { db } from '@/db'
 import type { ProxyRule } from '@/db/models'
+import type { SystemProxyState } from '@/types/electron'
 
 export const useProxyStore = defineStore('proxy', () => {
   // ====== State ======
@@ -9,6 +10,7 @@ export const useProxyStore = defineStore('proxy', () => {
   const isRunning = ref(false)
   const port = ref(8899)
   const loading = ref(false)
+  const systemState = ref<SystemProxyState | null>(null)
 
   // ====== Computed ======
   const enabledRules = computed(() => rules.value.filter((r) => r.enabled))
@@ -117,11 +119,13 @@ export const useProxyStore = defineStore('proxy', () => {
     return typeof window !== 'undefined' && !!window.electronAPI?.isElectron
   }
 
-  async function startProxy(): Promise<void> {
+  /**
+   * 启动代理，返回错误信息（成功返回 null）
+   */
+  async function startProxy(): Promise<string | null> {
     const api = window.electronAPI
     if (!api || !api.isElectron) {
-      console.warn('[proxyStore] 代理功能仅在桌面版中可用')
-      return
+      return '代理功能仅在桌面版中可用'
     }
     try {
       const result = await api.proxy.start(
@@ -130,11 +134,14 @@ export const useProxyStore = defineStore('proxy', () => {
       )
       if (result.success) {
         isRunning.value = true
-      } else {
-        console.error('[proxyStore] 代理启动失败:', result.error)
+        await refreshSystemState()
+        return null
       }
-    } catch (err) {
+      console.error('[proxyStore] 代理启动失败:', result.error)
+      return result.error || '代理启动失败'
+    } catch (err: any) {
       console.error('[proxyStore] startProxy error:', err)
+      return err?.message || '代理启动失败'
     }
   }
 
@@ -143,6 +150,7 @@ export const useProxyStore = defineStore('proxy', () => {
     if (!api || !api.isElectron) return
     const result = await api.proxy.stop()
     isRunning.value = false
+    await refreshSystemState()
     if (!result.success) {
       console.warn('[proxyStore] stopProxy returned failure:', result)
     }
@@ -159,6 +167,17 @@ export const useProxyStore = defineStore('proxy', () => {
       }
     } catch (err) {
       console.error('[proxyStore] refreshStatus error:', err)
+    }
+  }
+
+  /** 读取当前系统代理配置，用于诊断 */
+  async function refreshSystemState(): Promise<void> {
+    const api = window.electronAPI
+    if (!api || !api.isElectron) return
+    try {
+      systemState.value = await api.proxy.systemState()
+    } catch (err) {
+      console.error('[proxyStore] 读取系统代理状态失败:', err)
     }
   }
 
@@ -179,6 +198,7 @@ export const useProxyStore = defineStore('proxy', () => {
     isRunning,
     port,
     loading,
+    systemState,
     // computed
     enabledRules,
     sortedRules,
@@ -194,6 +214,7 @@ export const useProxyStore = defineStore('proxy', () => {
     startProxy,
     stopProxy,
     refreshStatus,
+    refreshSystemState,
     checkPort
   }
 })

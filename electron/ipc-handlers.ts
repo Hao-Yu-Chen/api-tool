@@ -6,7 +6,12 @@ import {
   updateRules,
   getProxyStatus
 } from './proxy-server'
-import { enableSystemProxy, disableSystemProxy, checkPortAvailable } from './system-proxy'
+import {
+  enableSystemProxy,
+  disableSystemProxy,
+  checkPortAvailable,
+  getSystemProxyState
+} from './system-proxy'
 
 interface DesktopSettings {
   autoLaunch: boolean
@@ -72,11 +77,22 @@ export function registerIpcHandlers(
     async (_event, port: number, rules: unknown[]) => {
       try {
         await startProxyServer(port, rules as any[])
-        enableSystemProxy(port)
-        return { success: true }
       } catch (err: any) {
         return { success: false, error: err.message }
       }
+
+      // 系统代理设置失败时必须回退，否则会留下一个没有生效的代理服务器
+      try {
+        enableSystemProxy(port)
+      } catch (err: any) {
+        await stopProxyServer().catch(() => undefined)
+        return {
+          success: false,
+          error: `系统代理设置失败: ${err.message}`
+        }
+      }
+
+      return { success: true }
     }
   )
 
@@ -119,6 +135,11 @@ export function registerIpcHandlers(
   ipcMain.handle('proxy:check-port', async (_event, port: number) => {
     const available = await checkPortAvailable(port)
     return { available }
+  })
+
+  // 读取当前系统代理配置（诊断用）
+  ipcMain.handle('proxy:system-state', () => {
+    return getSystemProxyState()
   })
 }
 
