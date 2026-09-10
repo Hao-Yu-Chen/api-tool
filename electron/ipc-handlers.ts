@@ -12,6 +12,14 @@ import {
   checkPortAvailable,
   getSystemProxyState
 } from './system-proxy'
+import {
+  configureCertDir,
+  isCAInstalled,
+  installCA,
+  uninstallCA,
+  exportCA
+} from './cert-installer'
+import { setMitmEnabled } from './proxy-server'
 
 interface DesktopSettings {
   autoLaunch: boolean
@@ -31,6 +39,9 @@ export function registerIpcHandlers(
   store: Store<{ desktop: DesktopSettings }>,
   getMainWindow: () => BrowserWindow | null
 ): void {
+  // 证书目录固定到 userData，保证根证书在重启后不变
+  configureCertDir()
+
   // 最小化窗口
   ipcMain.on('minimize-window', () => {
     const win = getMainWindow()
@@ -92,6 +103,9 @@ export function registerIpcHandlers(
         }
       }
 
+      // 已信任根证书时开启 HTTPS 解密，https 请求才能改写 URL 并转发到 http 目标
+      setMitmEnabled(isCAInstalled())
+
       return { success: true }
     }
   )
@@ -140,6 +154,36 @@ export function registerIpcHandlers(
   // 读取当前系统代理配置（诊断用）
   ipcMain.handle('proxy:system-state', () => {
     return getSystemProxyState()
+  })
+
+  // ====== HTTPS 解密证书 ======
+
+  // 根证书状态
+  ipcMain.handle('proxy:cert-status', () => {
+    return { installed: isCAInstalled() }
+  })
+
+  // 安装根证书到受信任的根证书颁发机构
+  ipcMain.handle('proxy:cert-install', () => {
+    const result = installCA()
+    if (result.success) {
+      setMitmEnabled(true)
+    }
+    return result
+  })
+
+  // 卸载根证书
+  ipcMain.handle('proxy:cert-uninstall', () => {
+    const result = uninstallCA()
+    if (result.success) {
+      setMitmEnabled(false)
+    }
+    return result
+  })
+
+  // 导出根证书
+  ipcMain.handle('proxy:cert-export', () => {
+    return exportCA()
   })
 }
 

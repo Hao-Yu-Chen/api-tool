@@ -11,6 +11,9 @@ export const useProxyStore = defineStore('proxy', () => {
   const port = ref(8899)
   const loading = ref(false)
   const systemState = ref<SystemProxyState | null>(null)
+  /** 根证书是否已安装到受信任的根证书颁发机构 */
+  const certInstalled = ref(false)
+  const certBusy = ref(false)
 
   // ====== Computed ======
   const enabledRules = computed(() => rules.value.filter((r) => r.enabled))
@@ -181,6 +184,63 @@ export const useProxyStore = defineStore('proxy', () => {
     }
   }
 
+  // ====== HTTPS 解密证书 ======
+
+  async function refreshCertStatus(): Promise<void> {
+    const api = window.electronAPI
+    if (!api || !api.isElectron) return
+    try {
+      const result = await api.proxy.certStatus()
+      certInstalled.value = result.installed
+    } catch (err) {
+      console.error('[proxyStore] 读取证书状态失败:', err)
+    }
+  }
+
+  /** 安装根证书，返回错误信息（成功返回 null） */
+  async function installCert(): Promise<string | null> {
+    const api = window.electronAPI
+    if (!api || !api.isElectron) return '仅在桌面版可用'
+    certBusy.value = true
+    try {
+      const result = await api.proxy.installCert()
+      certInstalled.value = result.success
+      return result.success ? null : result.error || '安装失败'
+    } catch (err: any) {
+      return err?.message || '安装失败'
+    } finally {
+      certBusy.value = false
+    }
+  }
+
+  /** 卸载根证书，返回错误信息（成功返回 null） */
+  async function uninstallCert(): Promise<string | null> {
+    const api = window.electronAPI
+    if (!api || !api.isElectron) return '仅在桌面版可用'
+    certBusy.value = true
+    try {
+      const result = await api.proxy.uninstallCert()
+      if (result.success) certInstalled.value = false
+      return result.success ? null : result.error || '卸载失败'
+    } catch (err: any) {
+      return err?.message || '卸载失败'
+    } finally {
+      certBusy.value = false
+    }
+  }
+
+  /** 导出根证书，返回导出路径或错误信息 */
+  async function exportCert(): Promise<{ path?: string; error?: string }> {
+    const api = window.electronAPI
+    if (!api || !api.isElectron) return { error: '仅在桌面版可用' }
+    try {
+      const result = await api.proxy.exportCert()
+      return result.success ? { path: result.path } : { error: result.error }
+    } catch (err: any) {
+      return { error: err?.message || '导出失败' }
+    }
+  }
+
   async function checkPort(p: number): Promise<boolean> {
     const api = window.electronAPI
     if (!api || !api.isElectron) return false
@@ -199,6 +259,8 @@ export const useProxyStore = defineStore('proxy', () => {
     port,
     loading,
     systemState,
+    certInstalled,
+    certBusy,
     // computed
     enabledRules,
     sortedRules,
@@ -215,6 +277,10 @@ export const useProxyStore = defineStore('proxy', () => {
     stopProxy,
     refreshStatus,
     refreshSystemState,
+    refreshCertStatus,
+    installCert,
+    uninstallCert,
+    exportCert,
     checkPort
   }
 })

@@ -1,22 +1,41 @@
 import http from 'http'
 import https from 'https'
 import net from 'net'
+import tls from 'tls'
 import { matchRule } from '../src/proxy/rule-engine'
 import type { ProxyRule } from '../src/db/models'
+import { issueCertificate } from './cert-manager'
 
 let server: http.Server | null = null
 let currentRules: ProxyRule[] = []
 let listenPort = 0
+// 是否开启 HTTPS 解密（需要本机已信任根证书）
+let mitmEnabled = false
 // 跟踪所有活跃连接，便于停止时快速销毁
 const connections = new Set<net.Socket>()
+
+export function setMitmEnabled(enabled: boolean): void {
+  mitmEnabled = enabled
+  console.log(`[proxy-server] HTTPS 解密${enabled ? '已开启' : '已关闭'}`)
+}
+
+export function isMitmEnabled(): boolean {
+  return mitmEnabled
+}
 
 /** 转发到目标地址的超时时间（毫秒） */
 const FORWARD_TIMEOUT = 30_000
 
 // ========== 辅助函数 ==========
 
+/** 请求是否来自 HTTPS 解密后的 TLS 连接 */
+function isTlsRequest(req: http.IncomingMessage): boolean {
+  return Boolean((req.socket as unknown as { __mitmHostname?: string })?.__mitmHostname)
+}
+
 /**
- * 从 IncomingMessage 构建完整请求 URL
+ * 从 IncomingMessage 构建完整请求 URL。
+ * 解密后的 HTTPS 请求走的是 TLS socket，请求行只有路径，需要靠 socket 标记还原 https。
  */
 function getFullUrl(req: http.IncomingMessage): string {
   // 浏览器通过正向代理发请求时，请求行带完整 URL
@@ -25,7 +44,9 @@ function getFullUrl(req: http.IncomingMessage): string {
   }
   // 否则从 Host 头 + path 拼接
   const host = req.headers.host || 'localhost'
-  const proto = (req.headers['x-forwarded-proto'] as string) || 'http'
+  const proto = isTlsRequest(req)
+    ? 'https'
+    : (req.headers['x-forwarded-proto'] as string) || 'http'
   return `${proto}://${host}${req.url || '/'}`
 }
 
@@ -87,8 +108,10 @@ function forward(
       method: req.method,
       headers: cleanHeaders(req.headers, target.hostHeader),
       // 每次请求独立建连，避免复用指向不同目标/端口的 socket
-      agent: false
-    },
+      agent: false,
+      // 测试环境常用自签证书，调试工具不应因证书校验失败而中断转发
+      rejectUnauthorized: false
+    } as https.RequestOptions,
     (proxyRes) => {
       res.writeHead(proxyRes.statusCode || 200, proxyRes.headers)
       proxyRes.pipe(res)
@@ -166,8 +189,9 @@ function forwardToOriginal(
     // 从 Host 头解析，保留原始端口
     hostHeader = req.headers.host || 'localhost'
     const [hostname, portStr] = hostHeader.split(':')
+    isHttps = isTlsRequest(req)
     targetHost = hostname
-    targetPort = parseInt(portStr, 10) || 80
+    targetPort = parseInt(portStr, 10) || (isHttps ? 443 : 80)
     targetPath = req.url || '/'
   }
 
@@ -203,22 +227,15 @@ function hostPatternToRegex(host: string): RegExp | null {
   }
 }
 
-interface TunnelRewrite {
-  hostname: string
-  port: number
-  ruleName: string
-}
-
 /**
- * CONNECT 请求只带 host:port，没有路径，无法做路径级重写。
- * 但主机级改写无需 MITM 即可完成：把隧道连到规则目标对应的主机与端口，
- * 这样 HTTPS 请求也能被转发到局域网测试环境。
+ * 找到第一条「源主机 + 端口」匹配 CONNECT 目标的规则。
+ * CONNECT 只带 host:port，没有路径，因此只做主机级判断。
  */
-function matchTunnelRewrite(
+function findRuleForHost(
   hostname: string,
   port: number,
   rules: ProxyRule[]
-): TunnelRewrite | null {
+): ProxyRule | null {
   const enabledRules = rules
     .filter((r) => r.enabled)
     .sort((a, b) => a.order - b.order)
@@ -235,19 +252,7 @@ function matchTunnelRewrite(
       const hostRegex = hostPatternToRegex(source.hostname)
       if (!hostRegex || !hostRegex.test(hostname)) continue
 
-      const dest = new URL(rule.targetAddress.replace(/\*\*?/g, 'x'))
-      if (dest.protocol !== 'https:') {
-        console.warn(
-          `[proxy-server] ⚠️ 规则 "${rule.name}" 目标为 ${dest.protocol}，HTTPS 隧道无法降级为明文，已原样透传`
-        )
-        continue
-      }
-
-      return {
-        hostname: dest.hostname,
-        port: parseInt(dest.port, 10) || 443,
-        ruleName: rule.name
-      }
+      return rule
     } catch {
       // 跳过无法解析的规则
       continue
@@ -255,6 +260,164 @@ function matchTunnelRewrite(
   }
 
   return null
+}
+
+interface TunnelRewrite {
+  hostname: string
+  port: number
+  ruleName: string
+}
+
+/**
+ * 未开启解密时的降级方案：把隧道连到规则目标对应的主机与端口。
+ * 只能改主机/端口，无法改路径，且目标必须同为 HTTPS（TLS 隧道无法降级为明文）。
+ */
+function getTunnelTarget(rule: ProxyRule): TunnelRewrite | null {
+  try {
+    const dest = new URL(rule.targetAddress.replace(/\*\*?/g, 'x'))
+    if (dest.protocol !== 'https:') {
+      console.warn(
+        `[proxy-server] ⚠️ 规则 "${rule.name}" 目标为 ${dest.protocol}，未开启 HTTPS 解密时无法转发，已原样透传`
+      )
+      return null
+    }
+    return {
+      hostname: dest.hostname,
+      port: parseInt(dest.port, 10) || 443,
+      ruleName: rule.name
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 终结 TLS：用本地根证书为被访问主机签发证书，解密后交回 HTTP 服务器处理，
+ * 这样 https 请求也能按规则改写路径、甚至转发到 http 目标。
+ */
+function startMitmTunnel(
+  hostname: string,
+  clientSocket: net.Socket,
+  head: Buffer
+): void {
+  try {
+    const pair = issueCertificate(hostname)
+    clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
+
+    const secureContext = tls.createSecureContext({
+      key: pair.key,
+      cert: pair.cert
+    })
+
+    const tlsSocket = new tls.TLSSocket(clientSocket, {
+      isServer: true,
+      secureContext,
+      // 强制协商 HTTP/1.1，否则浏览器会升级到 HTTP/2，解密后的报文无法解析
+      ALPNProtocols: ['http/1.1'],
+      requestCert: false,
+      rejectUnauthorized: false
+    })
+    ;(tlsSocket as unknown as { __mitmHostname?: string }).__mitmHostname = hostname
+
+    tlsSocket.on('error', (err: Error) => {
+      console.error(`[proxy-server] TLS 解密错误 (${hostname}):`, err.message)
+      if (!tlsSocket.destroyed) tlsSocket.destroy()
+    })
+
+    console.log(`[proxy-server] 🔓 解密 HTTPS: ${hostname}`)
+
+    // 交给 HTTP 服务器解析解密后的请求，复用同一套规则匹配逻辑
+    server?.emit('connection', tlsSocket)
+
+    if (head && head.length > 0) {
+      tlsSocket.unshift(head)
+    }
+  } catch (err: any) {
+    console.error('[proxy-server] 签发证书失败:', err?.message)
+    clientSocket.end()
+  }
+}
+
+/**
+ * WebSocket 等升级请求：解密后不能再封装，按规则把原始升级报文转发到目标
+ */
+function handleUpgrade(
+  req: http.IncomingMessage,
+  socket: net.Socket,
+  head: Buffer
+): void {
+  const fullUrl = getFullUrl(req)
+  const isTls = isTlsRequest(req)
+
+  let result: ReturnType<typeof matchRule> = { matched: false }
+  try {
+    result = matchRule(fullUrl, currentRules)
+  } catch (err: any) {
+    console.error('[proxy-server] 升级请求规则匹配异常:', err?.message)
+  }
+
+  let targetHost: string
+  let targetPort: number
+  let targetPath: string
+  let hostHeader: string
+  let secure: boolean
+
+  if (result.matched) {
+    const target = new URL(result.targetUrl)
+    secure = target.protocol === 'https:'
+    targetHost = target.hostname
+    targetPort = parseInt(target.port, 10) || (secure ? 443 : 80)
+    targetPath = target.pathname + target.search
+    hostHeader = target.host
+  } else {
+    hostHeader = req.headers.host || 'localhost'
+    const [hostname, portStr] = hostHeader.split(':')
+    targetHost = hostname
+    targetPort = parseInt(portStr, 10) || (isTls ? 443 : 80)
+    targetPath = req.url || '/'
+    secure = isTls
+  }
+
+  console.log(
+    `[proxy-server] ⇅ 升级请求: ${fullUrl} → ${secure ? 'https' : 'http'}://${targetHost}:${targetPort}${targetPath}`
+  )
+
+  const headers = cleanHeaders(req.headers, hostHeader)
+  const lines = [`${req.method} ${targetPath} HTTP/1.1`]
+  for (const [key, value] of Object.entries(headers)) {
+    if (value === undefined) continue
+    if (Array.isArray(value)) {
+      for (const item of value) lines.push(`${key}: ${item}`)
+    } else {
+      lines.push(`${key}: ${value}`)
+    }
+  }
+  lines.push('', '')
+
+  const targetSocket = secure
+    ? tls.connect({
+        host: targetHost,
+        port: targetPort,
+        servername: targetHost,
+        rejectUnauthorized: false
+      })
+    : net.connect(targetPort, targetHost)
+
+  const onFail = (err: Error) => {
+    console.error('[proxy-server] 升级请求转发失败:', err.message)
+    targetSocket.destroy()
+    socket.destroy()
+  }
+
+  targetSocket.on(secure ? 'secureConnect' : 'connect', () => {
+    targetSocket.write(lines.join('\r\n'))
+    if (head && head.length > 0) targetSocket.write(head)
+    targetSocket.pipe(socket)
+    socket.pipe(targetSocket)
+  })
+
+  targetSocket.on('error', onFail)
+  socket.on('error', onFail)
 }
 
 // ========== 规则校验 ==========
@@ -334,7 +497,16 @@ export function startProxyServer(
         const [hostname, portStr] = url.split(':')
         const targetPort = parseInt(portStr, 10) || 443
 
-        const rewrite = matchTunnelRewrite(hostname, targetPort, currentRules)
+        const rule = findRuleForHost(hostname, targetPort, currentRules)
+
+        // 命中规则时必须解密：路径改写与 https → http 降级都无法在 TLS 隧道内完成
+        if (mitmEnabled && rule) {
+          startMitmTunnel(hostname, clientSocket, head)
+          return
+        }
+
+        // 未开启解密时的降级：仅改主机与端口
+        const rewrite = rule ? getTunnelTarget(rule) : null
         const destHost = rewrite ? rewrite.hostname : hostname
         const destPort = rewrite ? rewrite.port : targetPort
 
@@ -368,6 +540,11 @@ export function startProxyServer(
         })
       }
     )
+
+    // WebSocket 等升级请求（含解密后的 wss）
+    server.on('upgrade', (req: http.IncomingMessage, socket, head: Buffer) => {
+      handleUpgrade(req, socket as net.Socket, head)
+    })
 
     // 跟踪连接便于快速关闭
     server.on('connection', (socket) => {

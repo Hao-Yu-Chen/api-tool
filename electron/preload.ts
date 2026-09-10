@@ -48,6 +48,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     systemState: () => {
       return ipcRenderer.invoke('proxy:system-state')
+    },
+    certStatus: () => {
+      return ipcRenderer.invoke('proxy:cert-status')
+    },
+    installCert: () => {
+      return ipcRenderer.invoke('proxy:cert-install')
+    },
+    uninstallCert: () => {
+      return ipcRenderer.invoke('proxy:cert-uninstall')
+    },
+    exportCert: () => {
+      return ipcRenderer.invoke('proxy:cert-export')
     }
   }
 })

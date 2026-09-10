@@ -32,6 +32,7 @@ onMounted(async () => {
   if (store.isElectron()) {
     await store.refreshStatus()
     await store.refreshSystemState()
+    await store.refreshCertStatus()
   }
   portInput.value = store.port
 })
@@ -117,6 +118,38 @@ function handleCancelStop() {
 async function handleRefresh() {
   await store.refreshStatus()
   await store.refreshSystemState()
+  await store.refreshCertStatus()
+}
+
+// ====== HTTPS 解密证书 ======
+
+async function handleInstallCert() {
+  const error = await store.installCert()
+  if (error) {
+    message.error(`安装失败：${error}`, { duration: 6000 })
+  } else {
+    message.success('根证书已安装，HTTPS 解密已开启')
+  }
+}
+
+async function handleUninstallCert() {
+  const error = await store.uninstallCert()
+  if (error) {
+    message.error(`卸载失败：${error}`, { duration: 6000 })
+  } else {
+    message.success('根证书已卸载')
+  }
+}
+
+async function handleExportCert() {
+  const result = await store.exportCert()
+  if (result.error) {
+    if (result.error !== '已取消') {
+      message.error(`导出失败：${result.error}`)
+    }
+  } else {
+    message.success(`已导出到 ${result.path}`)
+  }
 }
 
 // ====== 计算属性 ======
@@ -199,6 +232,43 @@ const systemProxyMismatch = computed(() => {
           :disabled="store.isRunning"
           :show-button="false"
         />
+      </div>
+
+      <!-- HTTPS 解密 -->
+      <div v-if="store.isElectron()" class="https-row">
+        <div class="https-header">
+          <span class="https-title">HTTPS 解密</span>
+          <n-tag :type="store.certInstalled ? 'success' : 'warning'" size="small" round>
+            {{ store.certInstalled ? '已信任根证书' : '未安装根证书' }}
+          </n-tag>
+        </div>
+        <p class="https-hint">
+          HTTPS 请求经过加密，只有在本机信任 API Tool 根证书后才能解密并改写地址，
+          从而转发到 http 测试环境。
+        </p>
+        <n-space :size="8">
+          <n-button
+            v-if="!store.certInstalled"
+            type="primary"
+            size="tiny"
+            :loading="store.certBusy"
+            @click="handleInstallCert"
+          >
+            安装根证书
+          </n-button>
+          <n-button
+            v-else
+            size="tiny"
+            :loading="store.certBusy"
+            @click="handleUninstallCert"
+          >
+            卸载根证书
+          </n-button>
+          <n-button size="tiny" @click="handleExportCert">导出证书</n-button>
+        </n-space>
+        <p v-if="!store.certInstalled" class="https-warn">
+          未安装时，https 请求只能整条隧道透传，无法改写路径或转发到 http 目标。
+        </p>
       </div>
 
       <!-- 系统代理诊断 -->
@@ -341,6 +411,38 @@ const systemProxyMismatch = computed(() => {
 .port-label-text {
   font-size: 12px;
   color: var(--app-text-secondary);
+}
+
+/* HTTPS 解密 */
+.https-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--app-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.https-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.https-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+.https-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+}
+.https-warn {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--app-warning, #f0a020);
 }
 
 /* 系统代理诊断 */

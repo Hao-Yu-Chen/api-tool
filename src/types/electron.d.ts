@@ -56,4 +56,12 @@ export interface ProxyAPI {
   checkPort(port: number): Promise<{ available: boolean }>
   /** 读取当前系统代理配置 */
   systemState(): Promise<SystemProxyState>
+  /** 根证书是否已安装到受信任的根证书颁发机构 */
+  certStatus(): Promise<{ installed: boolean }>
+  /** 安装根证书（Windows 可能弹出确认对话框） */
+  installCert(): Promise<{ success: boolean; error?: string; certPath?: string }>
+  /** 卸载根证书 */
+  uninstallCert(): Promise<{ success: boolean; error?: string }>
+  /** 导出根证书到指定位置 */
+  exportCert(): Promise<{ success: boolean; error?: string; path?: string }>
 }
